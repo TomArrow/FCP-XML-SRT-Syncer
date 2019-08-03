@@ -5,8 +5,23 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:FCP_XML_SRT_Syncer"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="FCP XML SRT Syncer" Height="450" Width="800">
     <Grid>
-        
+        <Grid.RowDefinitions>
+            <RowDefinition Height="25"></RowDefinition>
+            <RowDefinition Height="*"></RowDefinition>
+        </Grid.RowDefinitions>
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <Button x:Name="btnLoadFCPXML" Click="BtnLoadFCPXML_Click">Load FCP XML</Button>
+            <Button>Load SRT</Button>
+            <Button>Generate synced SRT</Button>
+        </StackPanel>
+        <StackPanel Grid.Row="1">
+            <ScrollViewer>
+
+                <TextBlock x:Name="foundSeqs_txt">
+                </TextBlock>
+            </ScrollViewer>
+        </StackPanel>
     </Grid>
 </Window>
