@@ -13,8 +13,8 @@
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Orientation="Horizontal">
             <Button x:Name="btnLoadFCPXML" Click="BtnLoadFCPXML_Click">Load FCP XML</Button>
-            <Button>Load SRT</Button>
-            <Button>Generate synced SRT</Button>
+            <Button x:Name="btnLoadSRT" Click="BtnLoadSRT_Click">Load SRT</Button>
+            <Button x:Name="btnDoSync" Click="BtnDoSync_Click">Generate synced SRT</Button>
         </StackPanel>
         <StackPanel Grid.Row="1">
             <ScrollViewer>

@@ -13,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using System.Xml;
 
@@ -30,6 +31,8 @@ namespace FCP_XML_SRT_Syncer
 
         string fcpXml = "";
         XmlDocument xmlDoc = null;
+        List<SRTEntry> srtEntries = null;
+        List<Snippet> allConfirmedSnippets = null;
 
         private void BtnLoadFCPXML_Click(object sender, RoutedEventArgs e)
         {
@@ -48,6 +51,91 @@ namespace FCP_XML_SRT_Syncer
                 findSnippets("file-5", mainSequenceId);
             }
         }
+
+        // Only works if both xml and srt were loaded.
+        private void BtnDoSync_Click(object sender, RoutedEventArgs e)
+        {
+
+            string newSRT = "";
+            int index = 1;
+            foreach (Snippet snippet in allConfirmedSnippets)
+            {
+                foreach (SRTEntry srtEntry in srtEntries)
+                {
+                    if (srtEntry.startTime > snippet.sourceAbsoluteInPoint && srtEntry.startTime < snippet.sourceAbsoluteOutPoint)
+                    {
+                        double absoluteSpeedRatio = (snippet.sourceEndsAt - snippet.sourceStartsAt) / (snippet.sourceAbsoluteOutPoint - snippet.sourceAbsoluteInPoint);
+                        double sourceStartDelay = srtEntry.startTime - snippet.sourceAbsoluteInPoint;
+                        double sourceEndDelay = srtEntry.endTime - snippet.sourceAbsoluteInPoint;
+                        double newStartTime = snippet.sourceStartsAt + sourceStartDelay * absoluteSpeedRatio;
+                        double newEndTime = snippet.sourceStartsAt + sourceEndDelay * absoluteSpeedRatio;
+
+                        TimeSpan newStartTimeFormatter = TimeSpan.FromSeconds(newStartTime);
+                        TimeSpan newEndTimeFormatter = TimeSpan.FromSeconds(newEndTime);
+
+                        newSRT += index + "\n" + newStartTimeFormatter.Hours + ":" + newStartTimeFormatter.Minutes + ":" + newStartTimeFormatter.Seconds + "," + newStartTimeFormatter.Milliseconds
+                            + " --> "
+                            + newEndTimeFormatter.Hours + ":" + newEndTimeFormatter.Minutes + ":" + newEndTimeFormatter.Seconds + "," + newEndTimeFormatter.Milliseconds
+                            + "\n"
+                            + srtEntry.text
+                            + "\n\n";
+                        //newSRT += index+"\n"+
+
+                        index++;
+                    }
+                    else
+                    {
+                        // isn't part of this snippet
+                    }
+                }
+            }
+
+            SaveFileDialog sfd = new SaveFileDialog();
+            sfd.Filter = "SubRip subtitle file (.srt)|*.srt";
+            if (sfd.ShowDialog() == true)
+            {
+                //sfd.FileName;
+                File.WriteAllText(sfd.FileName, newSRT);
+            }
+        }
+
+        //Regexp for SRT: \d\s*\n(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)\s*\n(.*?)\n\s*\n
+        //
+        private void BtnLoadSRT_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "SubRip subtitle file (.srt)|*.srt";
+            if (ofd.ShowDialog() == true)
+            {
+                srtEntries = new List<SRTEntry>();
+
+                string entireFile = File.ReadAllText(ofd.FileName);
+
+                Regex rx = new Regex(@"\d\s*\r?\n(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)\s*\r?\n(.*?)\r?\n\s*\r?\n",
+                  RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+                MatchCollection matches = rx.Matches(entireFile);
+
+                foreach(Match match in matches)
+                {
+                    int FromHours = int.Parse(match.Groups[1].Value);
+                    int FromMinutes = int.Parse(match.Groups[2].Value);
+                    int FromSeconds = int.Parse(match.Groups[3].Value);
+                    int FromMilliSeconds = int.Parse(match.Groups[4].Value);
+                    double fromTime = FromSeconds + FromMilliSeconds / 1000d + FromMinutes * 60 + FromHours * 3600;
+                    int ToHours = int.Parse(match.Groups[5].Value);
+                    int ToMinutes = int.Parse(match.Groups[6].Value);
+                    int ToSeconds = int.Parse(match.Groups[7].Value);
+                    int ToMilliSeconds = int.Parse(match.Groups[8].Value);
+                    double toTime = ToSeconds + ToMilliSeconds / 1000d + ToMinutes * 60 + ToHours * 3600;
+                    string text = match.Groups[9].Value;
+                    SRTEntry entry = new SRTEntry(text, fromTime, toTime);
+                    srtEntries.Add(entry);
+                    foundSeqs_txt.Text += entry.ToString()+"\n";
+                }
+            }
+        }
+
 
         private void findSnippets(string fileId, string sequenceId)
         {
@@ -72,6 +160,14 @@ namespace FCP_XML_SRT_Syncer
 
                     int start = int.Parse(clipitem.SelectSingleNode("start").FirstChild.InnerText);
                     int end = int.Parse(clipitem.SelectSingleNode("end").FirstChild.InnerText);
+
+                    // If there is a transition on this clip, start or end will be -1 and we have to examine the sibling transitionitem
+                    if(start == -1)
+                    {
+                        XmlNode previous = clipitem.PreviousSibling;
+
+                    }
+
                     int inV = int.Parse(clipitem.SelectSingleNode("in").FirstChild.InnerText);
                     int outV = int.Parse(clipitem.SelectSingleNode("out").FirstChild.InnerText);
                     XmlNode timebaseClipItem = clipitem.SelectNodes("rate/timebase")[0]; //framerate
@@ -91,6 +187,7 @@ namespace FCP_XML_SRT_Syncer
 
                     if (currentSequenceId == sequenceId)
                     {
+                        foundSeqs_txt.Text += sequenceSnippet.ToString() + "\n";
                         confirmedSnippets.Add(sequenceSnippet);
                     } else
                     {
@@ -101,7 +198,9 @@ namespace FCP_XML_SRT_Syncer
                 }
             }
 
-            foundSeqs_txt.Text = confirmedSnippets.Count.ToString();
+            allConfirmedSnippets = confirmedSnippets;
+
+            foundSeqs_txt.Text = confirmedSnippets.Count.ToString() + foundSeqs_txt.Text;
         }
 
         private List<Snippet> followSnippet(Snippet snippet, string sequenceId)
@@ -128,6 +227,17 @@ namespace FCP_XML_SRT_Syncer
 
                     int start = int.Parse(clipitem.SelectSingleNode("start").FirstChild.InnerText);
                     int end = int.Parse(clipitem.SelectSingleNode("end").FirstChild.InnerText);
+
+                    if (start == -1)
+                    {
+                        start = int.Parse(clipitem.PreviousSibling.SelectSingleNode("start").FirstChild.InnerText);
+                    }
+                    if(end == -1)
+                    {
+
+                        end = int.Parse(clipitem.NextSibling.SelectSingleNode("end").FirstChild.InnerText);
+                    }
+
                     int inV = int.Parse(clipitem.SelectSingleNode("in").FirstChild.InnerText);
                     int outV = int.Parse(clipitem.SelectSingleNode("out").FirstChild.InnerText);
                     XmlNode timebaseClipItem = clipitem.SelectNodes("rate/timebase")[0]; //framerate
@@ -282,5 +392,6 @@ namespace FCP_XML_SRT_Syncer
             }
             foundSeqs_txt.Text = stuff;
         }
+
     }
 }

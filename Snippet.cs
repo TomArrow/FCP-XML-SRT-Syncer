@@ -11,7 +11,7 @@ namespace FCP_XML_SRT_Syncer
     {
         public string sequenceId = "";
 
-        // These all in milliseconds
+        // These all in seconds
         public double sourceStartsAt = 0;
         public double sourceEndsAt = 0;
         public double sourceAbsoluteInPoint = 0;
