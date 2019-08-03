@@ -31,7 +31,7 @@ namespace FCP_XML_SRT_Syncer
 
         string fcpXml = "";
         XmlDocument xmlDoc = null;
-        List<SRTEntry> srtEntries = null;
+        HashSet<SRTEntry> srtEntries = null;
         List<Snippet> allConfirmedSnippets = null;
 
         private void BtnLoadFCPXML_Click(object sender, RoutedEventArgs e)
@@ -56,13 +56,20 @@ namespace FCP_XML_SRT_Syncer
         private void BtnDoSync_Click(object sender, RoutedEventArgs e)
         {
 
+            HashSet<SRTEntry> newSRTEntries = new HashSet<SRTEntry>(new SRTComparer());
+
             string newSRT = "";
             int index = 1;
             foreach (Snippet snippet in allConfirmedSnippets)
             {
                 foreach (SRTEntry srtEntry in srtEntries)
                 {
-                    if (srtEntry.startTime > snippet.sourceAbsoluteInPoint && srtEntry.startTime < snippet.sourceAbsoluteOutPoint)
+
+                    // TODO Check for overlapping timespans in general. Not really that important though, would only apply in a small number of circumstances.
+                    if (srtEntry.startTime > snippet.sourceAbsoluteInPoint && srtEntry.startTime < snippet.sourceAbsoluteOutPoint
+                        /*||
+                        srtEntry.endTime > snippet.sourceAbsoluteInPoint && srtEntry.endTime < snippet.sourceAbsoluteOutPoint*/
+                        )
                     {
                         double absoluteSpeedRatio = (snippet.sourceEndsAt - snippet.sourceStartsAt) / (snippet.sourceAbsoluteOutPoint - snippet.sourceAbsoluteInPoint);
                         double sourceStartDelay = srtEntry.startTime - snippet.sourceAbsoluteInPoint;
@@ -70,18 +77,9 @@ namespace FCP_XML_SRT_Syncer
                         double newStartTime = snippet.sourceStartsAt + sourceStartDelay * absoluteSpeedRatio;
                         double newEndTime = snippet.sourceStartsAt + sourceEndDelay * absoluteSpeedRatio;
 
-                        TimeSpan newStartTimeFormatter = TimeSpan.FromSeconds(newStartTime);
-                        TimeSpan newEndTimeFormatter = TimeSpan.FromSeconds(newEndTime);
-
-                        newSRT += index + "\n" + newStartTimeFormatter.Hours + ":" + newStartTimeFormatter.Minutes + ":" + newStartTimeFormatter.Seconds + "," + newStartTimeFormatter.Milliseconds
-                            + " --> "
-                            + newEndTimeFormatter.Hours + ":" + newEndTimeFormatter.Minutes + ":" + newEndTimeFormatter.Seconds + "," + newEndTimeFormatter.Milliseconds
-                            + "\n"
-                            + srtEntry.text
-                            + "\n\n";
                         //newSRT += index+"\n"+
+                        newSRTEntries.Add(new SRTEntry(srtEntry.text, newStartTime,newEndTime));
 
-                        index++;
                     }
                     else
                     {
@@ -90,12 +88,34 @@ namespace FCP_XML_SRT_Syncer
                 }
             }
 
+            List<SRTEntry> newSRTEntriesSorted = newSRTEntries.ToList<SRTEntry>().OrderBy(p => p.startTime).ToList();
+
+            foreach(SRTEntry newEntry in newSRTEntriesSorted)
+            {
+
+                TimeSpan newStartTimeFormatter = TimeSpan.FromSeconds(newEntry.startTime);
+                TimeSpan newEndTimeFormatter = TimeSpan.FromSeconds(newEntry.endTime);
+                
+                newSRT += index + "\n" + newStartTimeFormatter.Hours.ToString("00") + ":" + newStartTimeFormatter.Minutes.ToString("00") + ":" + newStartTimeFormatter.Seconds.ToString("00") + "," + newStartTimeFormatter.Milliseconds.ToString("000")
+                    + " --> "
+                    + newEndTimeFormatter.Hours.ToString("00") + ":" + newEndTimeFormatter.Minutes.ToString("00") + ":" + newEndTimeFormatter.Seconds.ToString("00") + "," + newEndTimeFormatter.Milliseconds.ToString("000")
+                    + "\n"
+                    + newEntry.text
+                    + "\n\n";
+
+
+                index++;
+            }
+
+
+
+
             SaveFileDialog sfd = new SaveFileDialog();
             sfd.Filter = "SubRip subtitle file (.srt)|*.srt";
             if (sfd.ShowDialog() == true)
             {
                 //sfd.FileName;
-                File.WriteAllText(sfd.FileName, newSRT);
+                File.WriteAllText(sfd.FileName, newSRT,new UTF8Encoding());
             }
         }
 
@@ -107,12 +127,12 @@ namespace FCP_XML_SRT_Syncer
             ofd.Filter = "SubRip subtitle file (.srt)|*.srt";
             if (ofd.ShowDialog() == true)
             {
-                srtEntries = new List<SRTEntry>();
+                srtEntries = new HashSet<SRTEntry>(new SRTComparer());
 
-                string entireFile = File.ReadAllText(ofd.FileName);
+                string entireFile = File.ReadAllText(ofd.FileName,new UTF8Encoding());
 
                 Regex rx = new Regex(@"\d\s*\r?\n(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)\s*\r?\n(.*?)\r?\n\s*\r?\n",
-                  RegexOptions.Compiled | RegexOptions.IgnoreCase);
+                  RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
                 MatchCollection matches = rx.Matches(entireFile);
 
