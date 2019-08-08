@@ -36,6 +36,7 @@ namespace FCP_XML_SRT_Syncer
 
         private void BtnLoadFCPXML_Click(object sender, RoutedEventArgs e)
         {
+            foundSeqs_txt.Text = "";
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Filter = "Final Cut Pro XML Files (.xml)|*.xml";
             if (ofd.ShowDialog() == true)
@@ -55,6 +56,8 @@ namespace FCP_XML_SRT_Syncer
         // Only works if both xml and srt were loaded.
         private void BtnDoSync_Click(object sender, RoutedEventArgs e)
         {
+
+            foundSeqs_txt.Text = "";
 
             HashSet<SRTEntry> newSRTEntries = new HashSet<SRTEntry>(new SRTComparer());
 
@@ -123,6 +126,8 @@ namespace FCP_XML_SRT_Syncer
         //
         private void BtnLoadSRT_Click(object sender, RoutedEventArgs e)
         {
+            foundSeqs_txt.Text = "";
+
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Filter = "SubRip subtitle file (.srt)|*.srt";
             if (ofd.ShowDialog() == true)
@@ -413,5 +418,9 @@ namespace FCP_XML_SRT_Syncer
             foundSeqs_txt.Text = stuff;
         }
 
+        private void BtnBatchSync_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }

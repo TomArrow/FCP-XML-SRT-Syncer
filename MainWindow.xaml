@@ -15,6 +15,7 @@
             <Button x:Name="btnLoadFCPXML" Click="BtnLoadFCPXML_Click">Load FCP XML</Button>
             <Button x:Name="btnLoadSRT" Click="BtnLoadSRT_Click">Load SRT</Button>
             <Button x:Name="btnDoSync" Click="BtnDoSync_Click">Generate synced SRT</Button>
+            <Button x:Name="btnBatchSync" Click="BtnBatchSync_Click">Batch convert (multi-selection, saved with .sync. suffix.</Button>
         </StackPanel>
         <StackPanel Grid.Row="1">
             <ScrollViewer>
