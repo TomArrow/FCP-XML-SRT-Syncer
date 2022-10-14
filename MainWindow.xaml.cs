@@ -16,6 +16,7 @@ using System.Windows.Shapes;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using System.Xml;
+using Path = System.IO.Path;
 
 namespace FCP_XML_SRT_Syncer
 {
@@ -421,6 +422,116 @@ namespace FCP_XML_SRT_Syncer
         private void BtnBatchSync_Click(object sender, RoutedEventArgs e)
         {
 
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "SubRip subtitle file (.srt)|*.srt";
+            ofd.Multiselect = true;
+            if (ofd.ShowDialog() == true)
+            {
+
+                foreach (string filename in ofd.FileNames)
+                {
+
+                    string fcpXml = "";
+                    XmlDocument xmlDoc = null;
+                    foundSeqs_txt.Text = "";
+
+                    HashSet<SRTEntry> srtEntries = new HashSet<SRTEntry>(new SRTComparer());
+
+                    string entireFile = File.ReadAllText(filename, new UTF8Encoding());
+
+                    Regex rx = new Regex(@"\d\s*\r?\n(\d+):(\d+):(\d+),(\d+)\s*-->\s*(\d+):(\d+):(\d+),(\d+)\s*\r?\n(.*?)\r?\n\s*\r?\n",
+                      RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+                    MatchCollection matches = rx.Matches(entireFile);
+
+                    foreach (Match match in matches)
+                    {
+                        int FromHours = int.Parse(match.Groups[1].Value);
+                        int FromMinutes = int.Parse(match.Groups[2].Value);
+                        int FromSeconds = int.Parse(match.Groups[3].Value);
+                        int FromMilliSeconds = int.Parse(match.Groups[4].Value);
+                        double fromTime = FromSeconds + FromMilliSeconds / 1000d + FromMinutes * 60 + FromHours * 3600;
+                        int ToHours = int.Parse(match.Groups[5].Value);
+                        int ToMinutes = int.Parse(match.Groups[6].Value);
+                        int ToSeconds = int.Parse(match.Groups[7].Value);
+                        int ToMilliSeconds = int.Parse(match.Groups[8].Value);
+                        double toTime = ToSeconds + ToMilliSeconds / 1000d + ToMinutes * 60 + ToHours * 3600;
+                        string text = match.Groups[9].Value;
+                        SRTEntry entry = new SRTEntry(text, fromTime, toTime);
+                        srtEntries.Add(entry);
+                        foundSeqs_txt.Text += entry.ToString() + "\n";
+                    }
+
+                    foundSeqs_txt.Text = "";
+
+                    HashSet<SRTEntry> newSRTEntries = new HashSet<SRTEntry>(new SRTComparer());
+
+                    string newSRT = "";
+                    int index = 1;
+                    foreach (Snippet snippet in allConfirmedSnippets)
+                    {
+                        foreach (SRTEntry srtEntry in srtEntries)
+                        {
+
+                            // TODO Check for overlapping timespans in general. Not really that important though, would only apply in a small number of circumstances.
+                            if (srtEntry.startTime > snippet.sourceAbsoluteInPoint && srtEntry.startTime < snippet.sourceAbsoluteOutPoint
+                                /*||
+                                srtEntry.endTime > snippet.sourceAbsoluteInPoint && srtEntry.endTime < snippet.sourceAbsoluteOutPoint*/
+                                )
+                            {
+                                double absoluteSpeedRatio = (snippet.sourceEndsAt - snippet.sourceStartsAt) / (snippet.sourceAbsoluteOutPoint - snippet.sourceAbsoluteInPoint);
+                                double sourceStartDelay = srtEntry.startTime - snippet.sourceAbsoluteInPoint;
+                                double sourceEndDelay = srtEntry.endTime - snippet.sourceAbsoluteInPoint;
+                                double newStartTime = snippet.sourceStartsAt + sourceStartDelay * absoluteSpeedRatio;
+                                double newEndTime = snippet.sourceStartsAt + sourceEndDelay * absoluteSpeedRatio;
+
+                                //newSRT += index+"\n"+
+                                newSRTEntries.Add(new SRTEntry(srtEntry.text, newStartTime, newEndTime));
+
+                            }
+                            else
+                            {
+                                // isn't part of this snippet
+                            }
+                        }
+                    }
+
+                    List<SRTEntry> newSRTEntriesSorted = newSRTEntries.ToList<SRTEntry>().OrderBy(p => p.startTime).ToList();
+
+                    foreach (SRTEntry newEntry in newSRTEntriesSorted)
+                    {
+
+                        TimeSpan newStartTimeFormatter = TimeSpan.FromSeconds(newEntry.startTime);
+                        TimeSpan newEndTimeFormatter = TimeSpan.FromSeconds(newEntry.endTime);
+
+                        newSRT += index + "\n" + newStartTimeFormatter.Hours.ToString("00") + ":" + newStartTimeFormatter.Minutes.ToString("00") + ":" + newStartTimeFormatter.Seconds.ToString("00") + "," + newStartTimeFormatter.Milliseconds.ToString("000")
+                            + " --> "
+                            + newEndTimeFormatter.Hours.ToString("00") + ":" + newEndTimeFormatter.Minutes.ToString("00") + ":" + newEndTimeFormatter.Seconds.ToString("00") + "," + newEndTimeFormatter.Milliseconds.ToString("000")
+                            + "\n"
+                            + newEntry.text
+                            + "\n\n";
+
+
+                        index++;
+                    }
+
+                    string path = Path.GetDirectoryName(filename);
+                    string newFilename = Path.GetFileNameWithoutExtension(filename) + ".sync";
+                    string extension = Path.GetExtension(filename);
+
+                    string newFullPath = path + "\\" + newFilename + extension;
+
+                    //SaveFileDialog sfd = new SaveFileDialog();
+                    //sfd.Filter = "SubRip subtitle file (.srt)|*.srt";
+                    //if (sfd.ShowDialog() == true)
+                    //{
+                        //sfd.FileName;
+                        File.WriteAllText(newFullPath, newSRT, new UTF8Encoding());
+                    //}
+
+
+                }
+            }
         }
     }
 }
